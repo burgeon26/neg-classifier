@@ -4,11 +4,13 @@
 # print('\n'.join(sents))
 
 from pyltp import Segmentor
-from Tool import clear,foreach
+from Tool import clear, foreach
 
 segmentor = Segmentor()  # 初始化实例
 segmentor.load("/home/zhenlingcn/Desktop/ltp_data/cws.model")  # 加载模型
-words = segmentor.segment(clear('!用餐菜中吃出鼻涕虫 店长解释虫子太黏_新闻频道_红网'))  # 分词
+sent=clear('合法权益得不到有效保障')
+print(sent)
+words = segmentor.segment(sent)  # 分词
 # print(len(words))
 # foreach(print,words)
 print('   '.join(words))

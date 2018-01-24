@@ -3,8 +3,8 @@ from pyltp import Postagger
 from pyltp import Segmentor
 from pyltp import SentenceSplitter
 
-from Tool import get_positive_list, get_negative_list
-from Tool import read_from_file
+from Tool import *
+from Word import Word
 
 
 class LTP:
@@ -16,7 +16,8 @@ class LTP:
         self.parser = Parser()  # 句法分析器
         self.parser.load("/home/zhenlingcn/Desktop/ltp_data/parser.model")  # 加载模型
         self.negative_list = get_negative_list()
-        self.positive_list = get_positive_list()
+        self.no_list = get_no_list()
+        self.limit_list = get_limit_list()
 
     def __del__(self):
         """
@@ -46,7 +47,8 @@ class Text:
         self.text = text
         self.read()
         self.negative_list = ltp.negative_list
-        self.positive_list = ltp.positive_list
+        self.no_list = ltp.no_list
+        self.limit_list = ltp.limit_list
 
     def read(self):
         """
@@ -65,6 +67,23 @@ class Text:
                 for sent in sents:
                     self.sentences.extend(SentenceSplitter.split(sent))
 
+    def split_insert(self, key, origin_key, word, temp):
+        """
+        由于分词系统存在特殊替换字符和普通词语黏连的情况，因此需要进行剥离
+        :param key: 特殊替换字符
+        :param origin_key:被替换字符串（源字符串）
+        :param word: 待剥离字符串
+        :param temp: 临时存储列表
+        """
+        if isinstance(key, list):
+            if word.split(key)[0] != '':
+                temp.append(word.split(key)[0])
+            temp.append(origin_key)
+            if word.split(key)[1] != '':
+                temp.append(word.split(key)[1])
+        else:
+            temp.append(origin_key)
+
     def score(self):
         """
         文章/文本分数计算
@@ -75,75 +94,115 @@ class Text:
             key_word_mark = ''
             for key_word in self.keywords:
                 if key_word in sentence:
-                    sentence = sentence.replace(key_word, '^')
+                    sentence = sentence.replace(key_word, '^')  ##分词前，替换关键词，防止关键词分割
                     key_word_mark = key_word
                     break
-            # print(sentence)
+            negative_mark = ''
+            for negative_word in self.negative_list:
+                negative_word = negative_word.word
+                if negative_word in sentence:
+                    sentence = sentence.replace(negative_word, '①')  ##分词前，替换关键词，防止关键词分割
+                    negative_mark = negative_word
+                    break
+            if key_word_mark == '' or negative_mark == '':
+                continue
+
             words = self.word_split(sentence)
-            # print(list(words))
-            words = list(map(lambda x: [x.split('^')[0], '^', x.split('^')[1]] if '^' in x else x, words))
             temp = []
             for word in words:
-                if isinstance(word, list):
-                    temp.extend(x for x in word if x != '')
+                if '①' in word:
+                    self.split_insert('①', negative_mark, word, temp)
+                elif '^' in word:
+                    self.split_insert('^', key_word_mark, word, temp)
                 else:
                     temp.append(word)
-            words = temp
-            # foreach(print,words)
+            words = temp  # 恢复单词列表
+            self.words=words
+            postags = self.part_mark(words)  # 词性标注
             # print(list(words))
-            if key_word_mark != '':
-                words[list(words).index('^')] = key_word_mark
-            # print('\n'.join(words))
-            postags = self.part_mark(words)
-            arcs = self.syntactic_dependency(words, postags)
-            all_score += self.dependence_score(self.keywords, words, arcs)
+            arcs = self.syntactic_dependency(words, postags)  # 句法依存
+            # print("\t".join("%d:%s" % (arc.head, arc.relation) for arc in arcs))
+            all_score += self.dependence_score(key_word_mark, words, arcs)
         return all_score
 
-    def dependence_score(self, key_words, words, arcs):
+    def negative_dfs(self, pos):
         """
-        句法依存，如果句法依存算法无法判定正负面，将自动调用简化格语法算法
+        从企业关键词开始查找中心负面词
+        :param pos:企业简称位置
+        :return: 负面词权重（如果权重为0，则代表没有负面词）
+        """
+        if pos == -1:
+            return 0, -1
+        for word in self.negative_list:
+            if self.words[pos] == word.word:
+                # print(word.word)
+                return word.weight, pos
+        return self.negative_dfs(self.nodes[pos].father)
+
+    def limit_dfs(self,pos):
+        """
+        从限定词和否定词位置开始向上DFS查找是否修饰负面词
+        :return: 是否存在限定词和否定词修饰
+        """
+        for word in (self.limit_list + self.no_list):
+            if word in self.words:
+                # print(word)
+                weight,find_pos=self.negative_dfs(self.words.index(word))
+                if find_pos==pos:
+                    return False
+        # print('good')
+        return True
+
+    def passive_check(self, key_word, negative_pos):
+        """
+        被动语态检查
+        例如'鸿道集团被王老吉投诉，告上法庭'，这里的王老吉处于被和负面词之间，因此负面词修饰的不是王老吉，在判定时需要进行过滤
+        :param key_word: 企业简称
+        :param negative_pos: 负面词位置
+        :return: True代表关键词不位于无效位置，False代表关键词位于无效位置
+        """
+        if '被' in self.words:
+            passive_index = self.words.index('被')
+            sub_str = ''.join(self.words[passive_index + 1:negative_pos])
+            if key_word in sub_str:
+                return False
+        return True
+
+    def dependence_score(self, key_word, words, arcs):
+        """
+        核心算法：句法依存，如果句法依存算法无法判定正负面，将自动调用简化格语法算法
         :param key_words:企业简称列表
         :param words:单词集合
         :param arcs:依存关系集合
         :return:评分
         """
-        for key_word in key_words:
-            try:
-                pos = list(words).index(key_word)
-                score = 0
-                while pos != -1:
-                    if words[pos] in self.negative_list:
-                        score -= 2
-                    elif words[pos] in self.positive_list:
-                        score += 1
-                    pos = arcs[pos].head - 1
-                if score != 0:
-                    return score
-            except ValueError:
-                pass
-        return self.case_grammar_score(key_words, words)
+        # print('调用句法依存')
+        # print(key_word)
+        self.nodes = [Node() for i in range(len(words))]
+        for pos, arc in zip(range(len(arcs)), arcs):
+            self.nodes[pos].father = arc.head - 1
+            self.nodes[arc.head - 1].son.append(pos)
+        pos = list(words).index(key_word)
+        score, negative_pos = self.negative_dfs(pos)
+        # print(score)
+        if score != 0 and self.limit_dfs(negative_pos) and self.passive_check(key_word, negative_pos):
+            return score
+        return 0
+        # 由于简化格语法算法过于粗糙，此处不考虑使用
+        # return self.case_grammar_score(words)
 
-    def case_grammar_score(self, key_words, words):
+    def case_grammar_score(self, words):
         """
         简化格语法评分
-        :param key_words:企业简称列表
         :param words:单词集合
         :return:评分
         """
         score = 0
-        effective = False
         for word in words:
-            if word in key_words:
-                effective = True
-            else:
-                if word in self.negative_list:
-                    score -= 2
-                elif word in self.positive_list:
-                    score += 1
-        if effective:
-            return score
-        else:
-            return 0
+            for negative_word in self.negative_list:
+                if word == negative_word.word:
+                    score += negative_word.weight
+        return score
 
     def word_split(self, sent):
         """
@@ -183,3 +242,9 @@ class Text:
         """
         arcs = self.parser.parse(words, postags)  # 句法分析
         return arcs
+
+
+class Node:
+    def __init__(self):
+        self.father = -1
+        self.son = []

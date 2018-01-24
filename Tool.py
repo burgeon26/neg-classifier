@@ -1,5 +1,10 @@
 import requests
 import json
+from Word import Word
+import logging
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
 
 
 def read_from_file(path):
@@ -33,17 +38,31 @@ def get_negative_list():
     获取负面词列表
     :return: 负面词列表
     """
-    lines = read_from_file('/home/zhenlingcn/Documents/ZFTP/negative.txt')
+    lines = read_from_file('/home/zhenlingcn/Documents/ZFTP/negative_core_word.txt')
+    lines = map(lambda x: x.replace('\n', '').replace('\ufeff', ''), lines)
+    words = []
+    for line in lines:
+        # print(line)
+        words.append(Word(line.split('	')[0], line.split('	')[1], int(line.split('	')[2])))
+    return words
+
+
+def get_no_list():
+    """
+    获取否定词列表
+    :return: 否定词列表
+    """
+    lines = read_from_file('/home/zhenlingcn/Documents/ZFTP/no_word.txt')
     lines = map(lambda x: x.replace('\n', '').replace('\ufeff', ''), lines)
     return list(lines)
 
 
-def get_positive_list():
+def get_limit_list():
     """
-    获取正面词列表
-    :return: 正面词列表
+    获取限制词列表
+    :return: 限制词列表
     """
-    lines = read_from_file('/home/zhenlingcn/Documents/ZFTP/positive.txt')
+    lines = read_from_file('/home/zhenlingcn/Documents/ZFTP/limit_word.txt')
     lines = map(lambda x: x.replace('\n', '').replace('\ufeff', ''), lines)
     return list(lines)
 
@@ -64,6 +83,7 @@ def get_abbs(company_name):
     :return: 企业简称列表
     """
     company = requests.post('http://218.77.58.173:5005/api/abb', company_name.encode('utf-8'))
+    # print(json.loads(company.text))
     abbs = json.loads(company.text)['abbs']
     # print(abbs)
-    return abbs
+    return list(filter(lambda x:x!='',set(abbs+[company_name])))
