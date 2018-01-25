@@ -17,14 +17,14 @@ def read_from_file(path):
         return f.readlines()
 
 
-def write_to_file(path, words):
+def write_to_file(path, words,type='w'):
     """
     写文件
     :param path: 文件路径
     :param words: 以行为单位的列表
     """
     words = list(map(lambda x: x + '\n', words))
-    with open(path, 'w') as f:
+    with open(path, type) as f:
         f.writelines(words)
 
 
@@ -66,6 +66,15 @@ def get_limit_list():
     lines = map(lambda x: x.replace('\n', '').replace('\ufeff', ''), lines)
     return list(lines)
 
+def get_special_list():
+    """
+    获取特殊修饰词列表
+    :return: 特殊修饰词列表
+    """
+    lines = read_from_file('/home/zhenlingcn/Documents/ZFTP/special_word.txt')
+    lines = map(lambda x: x.replace('\n', '').replace('\ufeff', ''), lines)
+    return list(lines)
+
 
 def clear(ori_str: str):
     """
@@ -86,4 +95,4 @@ def get_abbs(company_name):
     # print(json.loads(company.text))
     abbs = json.loads(company.text)['abbs']
     # print(abbs)
-    return list(filter(lambda x:x!='',set(abbs+[company_name])))
+    return sorted(list(filter(lambda x: x != '', set(abbs + [company_name]))),key=lambda x:len(x),reverse=True)

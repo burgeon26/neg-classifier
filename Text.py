@@ -1,23 +1,29 @@
-from pyltp import Parser
+from pyltp import Parser, SementicRoleLabeller
 from pyltp import Postagger
 from pyltp import Segmentor
 from pyltp import SentenceSplitter
 
 from Tool import *
 from Word import Word
+import re
 
 
 class LTP:
     def __init__(self):
         self.segmentor = Segmentor()  # 分词器
-        self.segmentor.load("/home/zhenlingcn/Desktop/ltp_data/cws.model")  # 加载模型
+        self.segmentor.load_with_lexicon("/home/zhenlingcn/Desktop/ltp_data/cws.model",
+                                         '/home/zhenlingcn/Desktop/ltp_data/word.txt')  # 加载模型
         self.postagger = Postagger()  # 词性分析器
         self.postagger.load("/home/zhenlingcn/Desktop/ltp_data/pos.model")  # 加载模型
         self.parser = Parser()  # 句法分析器
         self.parser.load("/home/zhenlingcn/Desktop/ltp_data/parser.model")  # 加载模型
+        self.labeller = SementicRoleLabeller()  # 语义角色分析器
+        self.labeller.load("/home/zhenlingcn/Desktop/ltp_data/pisrl.model")  # 加载模型
         self.negative_list = get_negative_list()
         self.no_list = get_no_list()
         self.limit_list = get_limit_list()
+        self.special_list = get_special_list()
+        self.key_sentences = []
 
     def __del__(self):
         """
@@ -26,6 +32,7 @@ class LTP:
         self.segmentor.release()
         self.postagger.release()
         self.parser.release()
+        self.labeller.release()
 
 
 class Text:
@@ -42,6 +49,8 @@ class Text:
         self.segmentor = ltp.segmentor  # 分词器
         self.postagger = ltp.postagger  # 词性分析器
         self.parser = ltp.parser  # 句法分析器
+        self.labeller = ltp.labeller  # 语义角色分析器
+        self.key_sentences = ltp.key_sentences
         self.keywords = keywords
         self.path = path
         self.text = text
@@ -49,6 +58,36 @@ class Text:
         self.negative_list = ltp.negative_list
         self.no_list = ltp.no_list
         self.limit_list = ltp.limit_list
+        self.special_list = ltp.special_list
+
+    def line_spilt(self, lines, split_word):
+        """
+        对字符串列表里的字符串按照一定规则进行分割
+        :param lines: 待分割字符串列表
+        :param split_word: 分割字符
+        :return: 分割后的字符串组成的列表
+        """
+        temp = []
+        for line in lines:
+            temp.extend(line.split(split_word))
+        return filter(lambda x: x != '', temp)
+
+    def js_code_check(self, lines):
+        """
+        检查字符串是否为JS代码，如果为JS代码，则不进行处理
+        :param lines: 待检查字符串列表
+        :return: 合法字符串列表
+        """
+        temp = []
+        for line in lines:
+            english_num = 0
+            if '=' in line:
+                for c in line:
+                    if 'a' <= c <= 'z' or 'A' <= c <= 'Z':
+                        english_num += 1
+            if english_num < 10:
+                temp.append(line)
+        return temp
 
     def read(self):
         """
@@ -59,6 +98,10 @@ class Text:
             lines = read_from_file(self.path)
         else:
             lines = [self.text]
+        lines = self.js_code_check(lines)
+        split_words = [' ', '\n', '\t', '。', '&nbsp;', '！', '；', '，', '】', '【']
+        for split_word in split_words:
+            lines = self.line_spilt(lines, split_word)
         for line in lines:
             if len(line) < 1000:
                 self.sentences.extend(SentenceSplitter.split(line))
@@ -94,35 +137,50 @@ class Text:
             key_word_mark = ''
             for key_word in self.keywords:
                 if key_word in sentence:
-                    sentence = sentence.replace(key_word, '^')  ##分词前，替换关键词，防止关键词分割
+                    sentence = sentence.replace(key_word, '^')  # 分词前，替换关键词，防止关键词分割
                     key_word_mark = key_word
                     break
             negative_mark = ''
             for negative_word in self.negative_list:
                 negative_word = negative_word.word
                 if negative_word in sentence:
-                    sentence = sentence.replace(negative_word, '①')  ##分词前，替换关键词，防止关键词分割
+                    sentence = sentence.replace(negative_word, '①')  # 分词前，替换关键词，防止关键词分割
                     negative_mark = negative_word
                     break
             if key_word_mark == '' or negative_mark == '':
                 continue
 
+            # print(sentence)
             words = self.word_split(sentence)
             temp = []
             for word in words:
-                if '①' in word:
+                if '①' in word and '^' in word:
+                    indexa = word.index('①')
+                    indexb = word.index('^')
+                    split_word = re.split('[①^]', word)
+                    if indexa < indexb:
+                        temp.extend([split_word[0], negative_mark, split_word[1], key_word_mark, split_word[2]])
+                    else:
+                        temp.extend([split_word[0], key_word_mark, split_word[1], negative_mark, split_word[2]])
+                elif '①' in word:
                     self.split_insert('①', negative_mark, word, temp)
                 elif '^' in word:
                     self.split_insert('^', key_word_mark, word, temp)
                 else:
                     temp.append(word)
             words = temp  # 恢复单词列表
-            self.words=words
+            self.words = words
             postags = self.part_mark(words)  # 词性标注
+            # print(''.join(words), key_word_mark, sentence)
             # print(list(words))
             arcs = self.syntactic_dependency(words, postags)  # 句法依存
             # print("\t".join("%d:%s" % (arc.head, arc.relation) for arc in arcs))
-            all_score += self.dependence_score(key_word_mark, words, arcs)
+            # for pos, word, arc in zip(range(0, len(words)), words, arcs):
+            #     print(pos , word, arc.head, arc.relation)
+            now_score = self.dependence_score(key_word_mark, words, postags, arcs)
+            if now_score > 0:
+                self.key_sentences.append(''.join(words))
+            all_score += now_score
         return all_score
 
     def negative_dfs(self, pos):
@@ -139,7 +197,7 @@ class Text:
                 return word.weight, pos
         return self.negative_dfs(self.nodes[pos].father)
 
-    def limit_dfs(self,pos):
+    def limit_dfs(self, pos):
         """
         从限定词和否定词位置开始向上DFS查找是否修饰负面词
         :return: 是否存在限定词和否定词修饰
@@ -147,16 +205,18 @@ class Text:
         for word in (self.limit_list + self.no_list):
             if word in self.words:
                 # print(word)
-                weight,find_pos=self.negative_dfs(self.words.index(word))
-                if find_pos==pos:
+                weight, find_pos = self.negative_dfs(self.words.index(word))
+                if find_pos == pos:
                     return False
         # print('good')
         return True
 
-    def passive_check(self, key_word, negative_pos):
+    def passive_check(self, key_word, negative_pos, arc):
         """
         被动语态检查
         例如'鸿道集团被王老吉投诉，告上法庭'，这里的王老吉处于被和负面词之间，因此负面词修饰的不是王老吉，在判定时需要进行过滤
+        特殊词检查
+        例如'A公司投诉B公司'，这里A公司在句子中所处的位置关系为SBV，因此判定投诉对于A无效
         :param key_word: 企业简称
         :param negative_pos: 负面词位置
         :return: True代表关键词不位于无效位置，False代表关键词位于无效位置
@@ -166,12 +226,16 @@ class Text:
             sub_str = ''.join(self.words[passive_index + 1:negative_pos])
             if key_word in sub_str:
                 return False
+        # 特殊词检查,不能为SBV关系
+        if self.words[negative_pos] in self.special_list:
+            if arc.relation == 'SBV':
+                return False
         return True
 
-    def dependence_score(self, key_word, words, arcs):
+    def dependence_score(self, key_word, words, postags, arcs):
         """
-        核心算法：句法依存，如果句法依存算法无法判定正负面，将自动调用简化格语法算法
-        :param key_words:企业简称列表
+        句法依存负面判定算法，如果句法依存负面判定算法无法判定正负面，将自动调用语义角色判定算法
+        :param key_word:企业简称
         :param words:单词集合
         :param arcs:依存关系集合
         :return:评分
@@ -185,24 +249,43 @@ class Text:
         pos = list(words).index(key_word)
         score, negative_pos = self.negative_dfs(pos)
         # print(score)
-        if score != 0 and self.limit_dfs(negative_pos) and self.passive_check(key_word, negative_pos):
+        if score != 0 and self.limit_dfs(negative_pos) and self.passive_check(key_word, negative_pos, arcs[pos]):
             return score
-        return 0
-        # 由于简化格语法算法过于粗糙，此处不考虑使用
-        # return self.case_grammar_score(words)
+        if len(''.join(words)) < 80:
+            return self.role_score(key_word, words, postags, arcs)
+        else:
+            return 0
 
-    def case_grammar_score(self, words):
+    def role_score(self, key_word, words, postags, arcs):
         """
-        简化格语法评分
-        :param words:单词集合
+        基于语义角色标注的负面算法
+        :param key_word: 企业关键词
+        :param words:单词列表
+        :param postags:词性标注列表
+        :param arcs:语法依存关系列表
         :return:评分
         """
+        roles = self.labeller.label(words, postags, arcs)  # 语义角色标注
         score = 0
-        for word in words:
+        for role in roles:
+            # print(role.index, "".join(
+            #     ["%s:(%d,%d)" % (arg.name, arg.range.start, arg.range.end)
+            #      for arg in role.arguments]))
+            # print(words[role.index])
             for negative_word in self.negative_list:
-                if word == negative_word.word:
-                    score += negative_word.weight
-        return score
+                if words[role.index] == negative_word.word:
+                    for argument in role.arguments:
+                        if argument.name == 'A0' and words[role.index] not in self.special_list and key_word in ''.join(
+                                words[argument.range.start:argument.range.end + 1]):
+                            # print('A0',''.join(words[argument.range.start:argument.range.end+1]))
+                            score += negative_word.weight
+                        elif argument.name == 'A1' and key_word in ''.join(
+                                words[argument.range.start:argument.range.end + 1]):
+                            # print('A1',''.join(words[argument.range.start:argument.range.end+1]))
+                            score += negative_word.weight
+        if score != 0:
+            return score
+        return 0
 
     def word_split(self, sent):
         """
@@ -214,6 +297,10 @@ class Text:
         return words
 
     def word_count(self):
+        """
+        单词频率统计，用于词库统计分析模块
+        :return: 单词统计表
+        """
         count = {}
         for sent in self.sentences:
             words = self.word_split(sent)
@@ -245,6 +332,7 @@ class Text:
 
 
 class Node:
+    #句法依存树结点
     def __init__(self):
         self.father = -1
         self.son = []

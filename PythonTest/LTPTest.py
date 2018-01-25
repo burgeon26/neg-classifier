@@ -8,12 +8,14 @@ from Tool import clear, foreach
 
 segmentor = Segmentor()  # 初始化实例
 segmentor.load("/home/zhenlingcn/Desktop/ltp_data/cws.model")  # 加载模型
-sent=clear('合法权益得不到有效保障')
+sent=clear('长业建设集团有限公司临时雇佣的送货员邱远东（男，广东人，36岁）在南方科技大学过渡校舍修缮改造工程工地N15栋1楼搬运配电柜时被倾倒的配电柜砸到，当场死亡')
 print(sent)
 words = segmentor.segment(sent)  # 分词
 # print(len(words))
 # foreach(print,words)
-print('   '.join(words))
+# print('   '.join(words))
+for num,word in enumerate(words):
+    print(num,word)
 segmentor.release()  # 释放模型
 
 from pyltp import Postagger
