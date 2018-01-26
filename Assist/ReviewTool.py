@@ -37,8 +37,8 @@ def dir_test(path):
     bad_news = 0
     error_file = 0
     type = 'w'
-    if os.path.exists('/home/zhenlingcn/Desktop/test/log.log'):
-        with open('/home/zhenlingcn/Desktop/test/log.log','rb') as f:
+    if os.path.exists(Config.LOG_PATH):
+        with open(Config.LOG_PATH, 'rb') as f:
             log = pickle.load(f)
             news_num = log['news_num']
             bad_news = log['bad_news']
@@ -74,19 +74,19 @@ def dir_test(path):
               '负面新闻数:{}\n'
               '中立新闻数:{}\n'.format(news_num, news_num - error_file, bad_news,
                                   news_num - error_file - bad_news))
-        write_to_file('/home/zhenlingcn/Desktop/test/key.txt', ltp.key_sentences, type)
-        if os.path.exists('/home/zhenlingcn/Desktop/test/log.log'):
-            os.remove('/home/zhenlingcn/Desktop/test/log.log')
+        write_to_file(Config.REVIEW_OUTPUT_PATH, ltp.key_sentences, type)
+        if os.path.exists(Config.LOG_PATH):
+            os.remove(Config.LOG_PATH)
     except Exception:
         log['news_num'] = news_num
         log['bad_news'] = bad_news
         log['error_file'] = error_file
-        with open('/home/zhenlingcn/Desktop/test/log.log', 'wb') as f:
+        with open(Config.LOG_PATH, 'wb') as f:
             pickle.dump(log, f)
-        write_to_file('/home/zhenlingcn/Desktop/test/key.txt', ltp.key_sentences,type)
+        write_to_file(Config.REVIEW_OUTPUT_PATH, ltp.key_sentences, type)
         print(traceback.format_exc())
         print('出现异常，日志已记录')
 
 
 if __name__ == '__main__':
-    dir_test('/home/zhenlingcn/Desktop/report_analysis_intel')
+    dir_test(Config.REVIEW_PATH)

@@ -1,24 +1,25 @@
+import re
+
 from pyltp import Parser, SementicRoleLabeller
 from pyltp import Postagger
 from pyltp import Segmentor
 from pyltp import SentenceSplitter
 
+import Config
 from Tool import *
-from Word import Word
-import re
 
 
 class LTP:
     def __init__(self):
         self.segmentor = Segmentor()  # 分词器
-        self.segmentor.load_with_lexicon("/home/zhenlingcn/Desktop/ltp_data/cws.model",
-                                         '/home/zhenlingcn/Desktop/ltp_data/word.txt')  # 加载模型
+        self.segmentor.load_with_lexicon(Config.SEGMENTOR_PATH,
+                                         Config.PERSONAL_SEGMENTOR_PATH)  # 加载模型
         self.postagger = Postagger()  # 词性分析器
-        self.postagger.load("/home/zhenlingcn/Desktop/ltp_data/pos.model")  # 加载模型
+        self.postagger.load(Config.POSTAGGER_PATH)  # 加载模型
         self.parser = Parser()  # 句法分析器
-        self.parser.load("/home/zhenlingcn/Desktop/ltp_data/parser.model")  # 加载模型
+        self.parser.load(Config.PARSER_PATH)  # 加载模型
         self.labeller = SementicRoleLabeller()  # 语义角色分析器
-        self.labeller.load("/home/zhenlingcn/Desktop/ltp_data/pisrl.model")  # 加载模型
+        self.labeller.load(Config.LABELLER_PATH)  # 加载模型
         self.negative_list = get_negative_list()
         self.no_list = get_no_list()
         self.limit_list = get_limit_list()
@@ -60,7 +61,8 @@ class Text:
         self.limit_list = ltp.limit_list
         self.special_list = ltp.special_list
 
-    def line_spilt(self, lines, split_word):
+    @staticmethod
+    def line_spilt(lines, split_word):
         """
         对字符串列表里的字符串按照一定规则进行分割
         :param lines: 待分割字符串列表
@@ -72,7 +74,8 @@ class Text:
             temp.extend(line.split(split_word))
         return filter(lambda x: x != '', temp)
 
-    def js_code_check(self, lines):
+    @staticmethod
+    def js_code_check(lines):
         """
         检查字符串是否为JS代码，如果为JS代码，则不进行处理
         :param lines: 待检查字符串列表
@@ -110,7 +113,8 @@ class Text:
                 for sent in sents:
                     self.sentences.extend(SentenceSplitter.split(sent))
 
-    def split_insert(self, key, origin_key, word, temp):
+    @staticmethod
+    def split_insert(key, origin_key, word, temp):
         """
         由于分词系统存在特殊替换字符和普通词语黏连的情况，因此需要进行剥离
         :param key: 特殊替换字符
@@ -219,6 +223,7 @@ class Text:
         例如'A公司投诉B公司'，这里A公司在句子中所处的位置关系为SBV，因此判定投诉对于A无效
         :param key_word: 企业简称
         :param negative_pos: 负面词位置
+        :param arc: 语法依存关系
         :return: True代表关键词不位于无效位置，False代表关键词位于无效位置
         """
         if '被' in self.words:
@@ -237,6 +242,7 @@ class Text:
         句法依存负面判定算法，如果句法依存负面判定算法无法判定正负面，将自动调用语义角色判定算法
         :param key_word:企业简称
         :param words:单词集合
+        :param postags: 词性标注列表
         :param arcs:依存关系集合
         :return:评分
         """
@@ -311,6 +317,23 @@ class Text:
                     count[word] = 1
         return count
 
+    def word_count_by_type(self, type=''):
+        """
+        特定词性的单词频率统计，用于单词推荐模块
+        :return: 单词统计表
+        """
+        count = {}
+        for sent in self.sentences:
+            words = self.word_split(sent)
+            postags = self.part_mark(words)
+            for word, postag in zip(words, postags):
+                if postag == type:
+                    if word in count.keys():
+                        count[word] += 1
+                    else:
+                        count[word] = 1
+        return count
+
     def part_mark(self, words):
         """
         词性标注
@@ -332,7 +355,7 @@ class Text:
 
 
 class Node:
-    #句法依存树结点
+    # 句法依存树结点
     def __init__(self):
         self.father = -1
         self.son = []

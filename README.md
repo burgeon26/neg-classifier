@@ -1,19 +1,21 @@
 # 互联网文本正负面判断和严重程度分级
 项目结构  
 - Tool 核心判定算法类  
+- Config 核心配置类  
 - Demo 演示示例  
 - Tool 工具类  
+- Word 负面单词类  
 - Assist  
     - ReviewTool 系统评测模块
     - WordCount 词库分析统计模块
-    - WordRecommend 词库推荐模块（尚未完成）
-- positive.txt 正面词汇表
-- negative_core_word.txt 负面核心词汇表
-- no_word.txt 否定词汇表
-- limit_word.txt 限定词汇表
-- passive_word.txt 特殊修饰词汇表
-- text.txt 供Demo调试使用的文本  
-- word.txt 商业词汇词库文件
+    - WordRecommend 词库推荐模块
+- Data
+    - negative_core_word.txt 负面核心词汇表
+    - no_word.txt 否定词汇表
+    - limit_word.txt 限定词汇表
+    - passive_word.txt 特殊修饰词汇表
+    - text.txt 供Demo调试使用的文本  
+    - word.txt 商业词汇词库文件
 
 关于特殊修饰词汇表
 有一些负面词企业关键词可以同时作为施事者和受事者，例如A公司举报B公司，这里B公司是受事者，从语义角色上来判断，也就是A公司处于A0角色，B公司处于A1角色，举报这个行为仅针对A1有效。
@@ -34,6 +36,10 @@
 
 
 更新日志 
+
+2018.01.26
+1. 完成词库推荐模块，基于词性推荐，暂时不能自动分类正面次和负面词
+2. 提取配置路径，相关路径配置可在Config.py中统一配置
 
 2018.01.25
 1. 算法优化，结合语义角色分析模块进行负面消息判定
