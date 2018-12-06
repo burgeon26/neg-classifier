@@ -22,4 +22,4 @@ NO_WORD='Data/no_word.txt'   #否定词
 LIMIT_WORD='Data/limit_word.txt' #限定词
 SPECIAL_WORD='Data/special_word.txt' #修饰词
 #企业简称接口
-ABBS_URL='http://218.77.58.173:5005/api/abb'
+ABBS_URL=''
