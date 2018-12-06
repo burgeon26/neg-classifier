@@ -21,7 +21,7 @@ def word_count(path, type=''):
         if os.path.isfile(path):
             text = Text(ltp, '', path)
             if type == '':
-                count = text.word_count()
+                count = text.word_count(stopwords=True)
             else:
                 count = text.word_count_by_type(type)
             for word, num in count.items():
@@ -30,6 +30,9 @@ def word_count(path, type=''):
                     all_count[word] += num
                 else:
                     all_count[word] = num
+    # all_count = sorted(all_count.items(), key=lambda d: d[1],reverse=True)
+    # all_count=[v for v in sorted(all_count.values())]
+
     return all_count
 
 
@@ -58,7 +61,8 @@ def auto_analysis(words, write=False, path='words.txt', limit=10):
           '低频词语:{}个\n'
           '从未使用词语:{}个\n'.format(len(useful_words), few_use, no_use))
     if write:
-        write_to_file(path, useful_words)
+        write_to_file(path, useful_words,type='a+')
+        # write_to_file(path, count,type='a+')
         print('已成功输出到文件')
 
 

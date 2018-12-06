@@ -24,7 +24,7 @@ def write_to_file(path, words, type='w'):
     :param path: 文件路径
     :param words: 以行为单位的列表
     """
-    words = list(map(lambda x: x + '\n', words))
+    words = list(map(lambda x: x[0] + '\n', words))
     with open(path, type) as f:
         f.writelines(words)
 
@@ -45,8 +45,17 @@ def get_negative_list():
     for line in lines:
         # print(line)
         words.append(Word(line.split('	')[0], line.split('	')[1], int(line.split('	')[2])))
+    words = sorted(words, key=lambda word: len(word.word), reverse=True)    # 按词长度从小到大排序
     return words
 
+def get_stop_words_list():
+    """
+    获取否定词此表
+    :return:
+    """
+    lines = read_from_file(Config.STOP_WORD_PATH)
+    lines = map(lambda x: x.replace('\n', '').replace('\ufeff', ''), lines)
+    return list(lines)
 
 def get_no_list():
     """
@@ -84,7 +93,8 @@ def clear(ori_str: str):
     :param ori_str:源字符串
     :return: 格式化字符串
     """
-    return ori_str.replace('(', '').replace(')', '').replace('［', '').replace('］', '').replace(' ', '')
+    return ori_str.replace('(', '').replace(')', '').replace('［', '').replace('］', '').replace(' ', '')\
+        .replace('<p>', '').replace('</p>', '')
 
 
 def get_abbs(company_name):
@@ -93,8 +103,9 @@ def get_abbs(company_name):
     :param company_name: 企业全称
     :return: 企业简称列表
     """
-    company = requests.post(Config.ABBS_URL, company_name.encode('utf-8'))
+    # company = requests.post(Config.ABBS_URL, company_name.encode('utf-8'))
     # print(json.loads(company.text))
-    abbs = json.loads(company.text)['abbs']
+    # abbs = json.loads(company.text)['abbs']
     # print(abbs)
-    return sorted(list(filter(lambda x: x != '', set(abbs + [company_name]))), key=lambda x: len(x), reverse=True)
+    # return sorted(list(filter(lambda x: x != '', set(abbs + [company_name]))), key=lambda x: len(x), reverse=True)
+    return sorted(list(filter(lambda x: x != '', set( [company_name]))), key=lambda x: len(x), reverse=True)

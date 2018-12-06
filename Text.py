@@ -1,12 +1,14 @@
+import queue
 import re
 
-from pyltp import Parser, SementicRoleLabeller
+from pyltp import Parser, SementicRoleLabeller, NamedEntityRecognizer
 from pyltp import Postagger
 from pyltp import Segmentor
 from pyltp import SentenceSplitter
 
 import Config
 from Tool import *
+from ltp import pyltp
 
 
 class LTP:
@@ -17,6 +19,8 @@ class LTP:
         self.postagger = Postagger()  # 词性分析器
         self.postagger.load(Config.POSTAGGER_PATH)  # 加载模型
         self.parser = Parser()  # 句法分析器
+        self.recognizer = NamedEntityRecognizer()
+        self.recognizer.load(Config.NAMED_ENTITY_RECONGNTION_PATH)
         self.parser.load(Config.PARSER_PATH)  # 加载模型
         self.labeller = SementicRoleLabeller()  # 语义角色分析器
         self.labeller.load(Config.LABELLER_PATH)  # 加载模型
@@ -51,6 +55,7 @@ class Text:
         self.postagger = ltp.postagger  # 词性分析器
         self.parser = ltp.parser  # 句法分析器
         self.labeller = ltp.labeller  # 语义角色分析器
+        self.recognizer = ltp.recognizer  # 命名实体分析器
         self.key_sentences = ltp.key_sentences
         self.keywords = keywords
         self.path = path
@@ -60,6 +65,10 @@ class Text:
         self.no_list = ltp.no_list
         self.limit_list = ltp.limit_list
         self.special_list = ltp.special_list
+        self.neg_human = list()
+        self.neg_org = list()
+        self.all_score = 0
+        self.stopwords = get_stop_words_list()
 
     @staticmethod
     def line_spilt(lines, split_word):
@@ -102,7 +111,7 @@ class Text:
         else:
             lines = [self.text]
         lines = self.js_code_check(lines)
-        split_words = [' ', '\n', '\t', '。', '&nbsp;', '！', '；', '，', '】', '【']
+        split_words = ['\n', '\t', '。', '&nbsp;', '！', '；', '，', '】', '【', '@#$%']
         for split_word in split_words:
             lines = self.line_spilt(lines, split_word)
         for line in lines:
@@ -133,11 +142,23 @@ class Text:
 
     def score(self):
         """
-        文章/文本分数计算
+        文章/文本负面分数计算
         :return: 总分数,>0代表文本为正面文本，<0代表文本为负面文本
         """
         all_score = 0
         for sentence in self.sentences:
+            # key_word_mark = self.keywords[0]
+            hn_names, cp_names = pyltp(sentence, self.segmentor, self.postagger, self.recognizer)  # 实体识别
+            '''取关键词'''
+            if not self.keywords:
+                if len(cp_names) > 0:
+                    self.keywords.append(cp_names[0])
+                    self.neg_human.extend(cp_names)
+                    self.neg_org = list()
+                elif len(hn_names) > 0:
+                    self.keywords.append(hn_names[0])
+                    self.neg_human.extend(hn_names)
+
             key_word_mark = ''
             for key_word in self.keywords:
                 if key_word in sentence:
@@ -151,10 +172,9 @@ class Text:
                     sentence = sentence.replace(negative_word, '①')  # 分词前，替换关键词，防止关键词分割
                     negative_mark = negative_word
                     break
-            if key_word_mark == '' or negative_mark == '':
+            if negative_mark == '':
                 continue
 
-            # print(sentence)
             words = self.word_split(sentence)
             temp = []
             for word in words:
@@ -173,19 +193,23 @@ class Text:
                 else:
                     temp.append(word)
             words = temp  # 恢复单词列表
-            self.words = words
+            self.tmp_sent_words = words
             postags = self.part_mark(words)  # 词性标注
-            # print(''.join(words), key_word_mark, sentence)
-            # print(list(words))
             arcs = self.syntactic_dependency(words, postags)  # 句法依存
-            # print("\t".join("%d:%s" % (arc.head, arc.relation) for arc in arcs))
-            # for pos, word, arc in zip(range(0, len(words)), words, arcs):
-            #     print(pos , word, arc.head, arc.relation)
-            now_score = self.dependence_score(key_word_mark, words, postags, arcs)
+            now_score = self.dependence_score(key_word_mark, words, postags, arcs)  # 句法依存正负面判断
             if now_score > 0:
                 self.key_sentences.append(''.join(words))
             all_score += now_score
+        self.all_score = all_score
         return all_score
+
+    def print_json(self):
+        """
+        输出分析结果集合
+        :return:
+        """
+        result = json.dumps({'score': self.all_score,'neg':self.neg_human+self.neg_org, 'neg_sentence': self.key_sentences}, ensure_ascii=False)
+        return result
 
     def negative_dfs(self, pos):
         """
@@ -196,7 +220,7 @@ class Text:
         if pos == -1:
             return 0, -1
         for word in self.negative_list:
-            if self.words[pos] == word.word:
+            if self.tmp_sent_words[pos] == word.word:
                 # print(word.word)
                 return word.weight, pos
         return self.negative_dfs(self.nodes[pos].father)
@@ -207,9 +231,9 @@ class Text:
         :return: 是否存在限定词和否定词修饰
         """
         for word in (self.limit_list + self.no_list):
-            if word in self.words:
+            if word in self.tmp_sent_words:
                 # print(word)
-                weight, find_pos = self.negative_dfs(self.words.index(word))
+                weight, find_pos = self.negative_dfs(self.tmp_sent_words.index(word))
                 if find_pos == pos:
                     return False
         # print('good')
@@ -226,13 +250,13 @@ class Text:
         :param arc: 语法依存关系
         :return: True代表关键词不位于无效位置，False代表关键词位于无效位置
         """
-        if '被' in self.words:
-            passive_index = self.words.index('被')
-            sub_str = ''.join(self.words[passive_index + 1:negative_pos])
+        if '被' in self.tmp_sent_words:
+            passive_index = self.tmp_sent_words.index('被')
+            sub_str = ''.join(self.tmp_sent_words[passive_index + 1:negative_pos])
             if key_word in sub_str:
                 return False
         # 特殊词检查,不能为SBV关系
-        if self.words[negative_pos] in self.special_list:
+        if self.tmp_sent_words[negative_pos] in self.special_list:
             if arc.relation == 'SBV':
                 return False
         return True
@@ -251,11 +275,24 @@ class Text:
         self.nodes = [Node() for i in range(len(words))]
         for pos, arc in zip(range(len(arcs)), arcs):
             self.nodes[pos].father = arc.head - 1
+            self.nodes[pos].tag = arc.relation
             self.nodes[arc.head - 1].son.append(pos)
-        pos = list(words).index(key_word)
-        score, negative_pos = self.negative_dfs(pos)
+
+        if not key_word:
+            for i,seg_word in enumerate(words):
+                for word in self.negative_list:
+                    if seg_word == word.word:
+                        # print(word.word)
+                        source_pos = negative_pos = i
+                        score = word.weight
+                        break
+        else:
+            source_pos = list(words).index(key_word)
+            score, negative_pos = self.negative_dfs(source_pos)
         # print(score)
-        if score != 0 and self.limit_dfs(negative_pos) and self.passive_check(key_word, negative_pos, arcs[pos]):
+        # score = 0
+        # negative_pos = -1
+        if score != 0 and self.limit_dfs(negative_pos) and self.passive_check(key_word, negative_pos, arcs[source_pos]):
             return score
         if len(''.join(words)) < 80:
             return self.role_score(key_word, words, postags, arcs)
@@ -302,7 +339,7 @@ class Text:
         words = self.segmentor.segment(sent)  # 单词分割
         return words
 
-    def word_count(self):
+    def word_count(self,stopwords=False):
         """
         单词频率统计，用于词库统计分析模块
         :return: 单词统计表
@@ -311,6 +348,8 @@ class Text:
         for sent in self.sentences:
             words = self.word_split(sent)
             for word in words:
+                if stopwords and word in self.stopwords:
+                    continue
                 if word in count.keys():
                     count[word] += 1
                 else:
@@ -359,3 +398,4 @@ class Node:
     def __init__(self):
         self.father = -1
         self.son = []
+        self.tag = None
