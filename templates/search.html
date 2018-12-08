@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Search</title>
+    <style>
+        #customers
+        {
+            font-family:"Trebuchet MS", Arial, Helvetica, sans-serif;
+            width:80%;
+            border-collapse:collapse;
+        }
+        #customers td, #customers th
+        {
+            font-size:1em;
+            border:1px solid;
+            padding:3px 7px 2px 7px;
+        }
+        #customers th
+        {
+            font-size:1.1em;
+            text-align:left;
+            padding-top:5px;
+            padding-bottom:4px;
+            background-color:black;
+            color:white;
+        }
+    </style>
+</head>
+<body background={{url_for('static',filename='images/back2.jpg')}}>
+    <div style="text-align:center">
+        <br/><br/><br/>
+        <font face="FangSong" size="+3">示例展示</font><br/>
+        <br/><br/>
+        <form action ='/search' method='post'>
+            <input type="txt"  rows="4" cols="60" placeholder="请输入关键词...."
+                   name='text' style="height:38px;width:480px;">
+            <button type="submit" class="search-submit" style="height:35px;width:60px;">提交</button>
+        </form>
+        <br/><br/>
+            {% if data['title'] %}
+                {% if data['information'] %}
+                <tr>
+                <!--<td><h3>{{ data['title'] }}</h3></td><br/>-->
+                    <td><h4>{{ data['information'] }}</h4></td><br/>
+                </tr>
+                {% else %}
+                    <h3>未找到！</h3>
+                {% endif %}
+            {% else %}
+                <h3>{{ tips }}</h3>
+            {% endif %}
+        <br/><br/>
+    </div>
+
+    <table  border="1" cellpadding="10" id="customers" style="width: 80%;margin:auto">
+            <thead>
+            <th>time</th>
+            <th>degree</th>
+            <th>craw_text</th>
+            <th>score</th>
+            <th>neg</th>
+            <th>neg_sentence</th>
+            </thead>
+            <tbody>
+              <meta charset="UTF-8">
+              {% for item in pagination.items %}
+                <tr>
+                    <td>{{ item.time}}</td>
+                    <td>{{ item.degree}}</td>
+                    <td>{{ item.craw_text}}</td>
+                    <td>{{ item.score}}</td>
+                    <td>{{ item.neg}}</td>
+                    <td>{{ item.neg_sentence}}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+        </table>
+
+        {# 宏定义形式实现的分页导航#}
+        {% import "_macros.html" as macros %}
+        {% if pagination %}
+        <div class="pagination container" style="text-align:center">
+            {{ macros.pagination_widget(pagination, 'search_form') }}
+        </div>
+        {% endif %}
+</body>
+</html>

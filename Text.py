@@ -56,7 +56,8 @@ class Text:
         self.parser = ltp.parser  # 句法分析器
         self.labeller = ltp.labeller  # 语义角色分析器
         self.recognizer = ltp.recognizer  # 命名实体分析器
-        self.key_sentences = ltp.key_sentences
+        # self.key_sentences = ltp.key_sentences
+        self.key_sentences = list()
         self.keywords = keywords
         self.path = path
         self.text = text

@@ -5,7 +5,7 @@ Data/content/**
 .idea/**
 .idea/misc.xml
 .idea/LTP.iml
-
+ltp_model/
 # Created by https://www.gitignore.io/api/pycharm+iml
 # Edit at https://www.gitignore.io/?templates=pycharm+iml
 

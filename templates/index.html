@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>test</title>
+    <style>
+        #customers
+        {
+            font-family:"Trebuchet MS", Arial, Helvetica, sans-serif;
+            width:80%;
+            border-collapse:collapse;
+        }
+        #customers td, #customers th
+        {
+            font-size:1em;
+            border:1px solid;
+            padding:3px 7px 2px 7px;
+        }
+        #customers th
+        {
+            font-size:1.1em;
+            text-align:left;
+            padding-top:5px;
+            padding-bottom:4px;
+            background-color:black;
+            color:white;
+        }
+    </style>
+</head>
+<body background={{url_for('static',filename='images/back2.jpg')}}>
+        <table  border="1" cellpadding="10" id="customers" style="width: 80%;margin:auto">
+            <thead>
+            <th>time</th>
+            <th>degree</th>
+            <th>craw_text</th>
+            <th>score</th>
+            <th>neg</th>
+            <th>neg_sentence</th>
+            </thead>
+            <tbody>
+              <meta charset="UTF-8">
+              {% for item in pagination.items %}
+                <tr>
+                    <td>{{ item.time}}</td>
+                    <td>{{ item.degree}}</td>
+                    <td>{{ item.craw_text}}</td>
+                    <td>{{ item.score}}</td>
+                    <td>{{ item.neg}}</td>
+                    <td>{{ item.neg_sentence}}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+        </table>
+        <!--<ul class="items">-->
+            <!--{% for item in pagination.items %}-->
+                <!--<li>-->
+                    <!--<p class="id">id号: {{ item.id }}</p>-->
+                    <!--<p class="name">名称: {{ item.name }}</p>-->
+                    <!--<p class="work">职业: {{ item.work }}</p>-->
+                    <!--&lt;!&ndash;<p class="detail">商品描述: {{ item.detail }}</p>&ndash;&gt;-->
+                <!--</li>-->
+            <!--{% endfor %}-->
+        <!--</ul>-->
+
+        {# 宏定义形式实现的分页导航#}
+        {% import "_macros.html" as macros %}
+        {% if pagination %}
+        <div class="pagination container" style="text-align:center">
+            {{ macros.pagination_widget(pagination, 'index') }}
+        </div>
+        {% endif %}
+</body>
+</html>

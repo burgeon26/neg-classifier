@@ -1,0 +1,38 @@
+{% macro pagination_widget(pagination, endpoint) %}
+<link rel="stylesheet" href="https://cdn.staticfile.org/twitter-bootstrap/3.3.7/css/bootstrap.min.css">
+<script src="https://cdn.staticfile.org/jquery/2.1.1/jquery.min.js"></script>
+<script src="https://cdn.staticfile.org/twitter-bootstrap/3.3.7/js/bootstrap.min.js"></script>
+
+<div id="page" style="font:14px arial;white-space:nowrap;padding-left:35px;text-align:center;">
+    <ul class="pagination pagination-centered">
+        {% if not pagination.has_prev %}{% endif %}
+        <li>
+            <a href="{% if pagination.has_prev %}{{ url_for(endpoint,page = pagination.page - 1, **kwargs) }}
+            {% else %}#{% endif %}" class="n">&laquo;
+            </a>
+        </li>
+
+        {% for p in pagination.iter_pages() %}
+            {% if p %}
+                {% if p == pagination.page %}
+                    <li>
+                        <a href="{{ url_for(endpoint, page = p, **kwargs) }}">{{ p }}</a>
+                    </li>
+                {% else %}
+                    <li>
+                        <a href="{{ url_for(endpoint, page = p, **kwargs) }}">{{ p }}</a>
+                    </li>
+                {% endif %}
+            {% else %}
+            <li class="disabled">
+                <a href="#">&hellip;</a>
+            </li>
+            {% endif %}
+        {% endfor %}
+        {% if not pagination.has_next %} {% endif %}
+            <li>
+                <a href="{% if pagination.has_next %}{{ url_for(endpoint,page = pagination.page + 1, **kwargs) }}{% else %}#{% endif %}" class="n">&raquo;</a>
+            </li>
+    </ul>
+</div>
+{% endmacro %}
